@@ -14,6 +14,7 @@ import requests
 import shutil
 import sys
 from time import strftime,gmtime
+from collections import defaultdict
 
 #stock
 # import subprocess
@@ -150,19 +151,27 @@ def get_token(target):
 
 def lz_create(target, stub, api_token, organization):
     log('INFO', lz_create.__name__, 'Running action: create')
+    url = f'{target}/api/v2/organizations/{organization}/workspaces'
+
+    ## create header
+    #
+    recursive_dict_header = lambda: defaultdict(recursive_dict_header)
+    headers = recursive_dict_header()
+    headers['Content-Type'] = 'application/vnd.api+json'
+    headers['Authorization'] = 'Bearer '+api_token
+    print(f'headers={headers}')
 
     ## create payload
     #
-    payload = {}
+    recursive_dict_payload = lambda: defaultdict(recursive_dict_payload)
+    payload = recursive_dict_payload()
     payload['data']['attributes']['name'] = 'hello_me'
     payload['data']['attributes']['resource-count'] = 0
-    payload['data']['type'] = 'workspaces'
+    payload['data']['attributes']['updated-at'] = "2017-11-29T19:18:09.976Z"
+    payload['type'] = 'workspaces'
+    json_payload = json.dumps(payload)
 
-    headers = {
-        'Content-Type': 'application/vnd.api+json',
-        'Authorization': f'Bearer {api_token}'
-    }
-    r = requests.post(f'https://{target}', params=payload, headers=headers)
+    r = requests.post(f'https://{url}', data=payload, headers=headers)
     print(r.text)
 
 
@@ -266,8 +275,9 @@ def main():
         log('ERROR', main.__name__, 'Please supply one of -c, -r, -u or -d (create, read, update, delete)')
         exit(1)
 
-    target = arg.target
-    stub   = arg.stub
+    target       = arg.target
+    stub         = arg.stub
+    organization = arg.organization
 
     log('INFO', main.__name__, 'eliza: landing zone automation')
     log('DIV', main.__name__)
