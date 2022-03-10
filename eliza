@@ -8,21 +8,23 @@
 ## main imports
 #
 import argparse
+import json
 import os
+import requests
 import shutil
 import sys
 from time import strftime,gmtime
 
 #stock
-import subprocess
-import re
-import random
-import signal
-import datetime
-import frontmatter
-from itertools import zip_longest
-import git
-import glob
+# import subprocess
+# import re
+# import random
+# import signal
+# import datetime
+# import frontmatter
+# from itertools import zip_longest
+# import git
+# import glob
 
 ############################################################################
 #
@@ -32,6 +34,7 @@ import glob
 
 DEBUG = False
 script_name = os.path.basename(__file__)
+terraform_credentials_file = '~/.terraform.d/credentials.tfrc.json'
 
 ############################################################################
 #
@@ -99,12 +102,69 @@ def log(level, func, message=''):
 
 ############################################################################
 #
+#   def get_token
+#
+############################################################################
+
+def get_token(target):
+    api_token = ''
+    credentials_data = ()
+
+    ## read file in
+    #
+    full_path = os.path.expanduser(terraform_credentials_file)
+
+    if os.path.exists(full_path):
+        try:
+            f = open(full_path , 'r')
+            lines = f.read()
+        except:
+            log('ERROR', get_token.__name__, 'Cannot open the Terraform credentials file ' + full_path)
+            exit(1)
+        credentials_data = json.loads(lines)
+    else:
+        log('ERROR', get_token.__name__, 'Cannot find the Terraform credentials file ' + full_path)
+        exit(1)
+
+    if not credentials_data:
+        log('ERROR', get_token.__name__, 'Cannot find the Terraform credentials file ' + full_path)
+        exit(1)
+
+    for cred in credentials_data['credentials']:
+        if cred == target:
+            log('INFO', lz_create.__name__, 'Extracting credential for target: ' + cred)
+            # print(credentials_data['credentials'][cred]['token'])
+            api_token = credentials_data['credentials'][cred]['token']
+
+    if not api_token:
+        log('ERROR', get_token.__name__, 'No credential found for ' + target + ' in ' + terraform_credentials_file)
+        exit(1)
+
+    return(api_token)
+
+############################################################################
+#
 #   def lz_create
 #
 ############################################################################
 
-def lz_create(target, stub):
+def lz_create(target, stub, api_token, organization):
     log('INFO', lz_create.__name__, 'Running action: create')
+
+    ## create payload
+    #
+    payload = {}
+    payload['data']['attributes']['name'] = 'hello_me'
+    payload['data']['attributes']['resource-count'] = 0
+    payload['data']['type'] = 'workspaces'
+
+    headers = {
+        'Content-Type': 'application/vnd.api+json',
+        'Authorization': f'Bearer {api_token}'
+    }
+    r = requests.post(f'https://{target}', params=payload, headers=headers)
+    print(r.text)
+
 
 ############################################################################
 #
@@ -112,7 +172,7 @@ def lz_create(target, stub):
 #
 ############################################################################
 
-def lz_read(target, stub):
+def lz_read(target, stub, api_token, organization):
     log('INFO', lz_read.__name__, 'Running action: read')
 
 ############################################################################
@@ -121,7 +181,7 @@ def lz_read(target, stub):
 #
 ############################################################################
 
-def lz_update(target, stub):
+def lz_update(target, stub, api_token, organization):
     log('INFO', lz_update.__name__, 'Running action: update')
 
 ############################################################################
@@ -130,7 +190,7 @@ def lz_update(target, stub):
 #
 ############################################################################
 
-def lz_delete(target, stub):
+def lz_delete(target, stub, api_token, organization):
     log('INFO', lz_delete.__name__, 'Running action: delete')
 
 ############################################################################
@@ -180,13 +240,14 @@ def main():
 
     ## add arguments to the parser
     #
-    action.add_argument('-c', '--create', action='store_true', help='Create a landing zone in Terraform Enterprise or Terraform Cloud')
-    action.add_argument('-r', '--read',   action='store_true', help='Read a landing zone in Terraform Enterprise or Terraform Cloud')
-    action.add_argument('-u', '--update', action='store_true', help='Update a landing zone in Terraform Enterprise or Terraform Cloud')
-    action.add_argument('-d', '--delete', action='store_true', help='Delete a landing zone in Terraform Enterprise or Terraform Cloud')
+    action.add_argument('-c', '--create',      action='store_true', help='Create a landing zone in Terraform Enterprise or Terraform Cloud')
+    action.add_argument('-r', '--read',        action='store_true', help='Read a landing zone in Terraform Enterprise or Terraform Cloud')
+    action.add_argument('-u', '--update',      action='store_true', help='Update a landing zone in Terraform Enterprise or Terraform Cloud')
+    action.add_argument('-d', '--delete',      action='store_true', help='Delete a landing zone in Terraform Enterprise or Terraform Cloud')
 
-    tfec.add_argument('-t', '--target',   type=str, help='Target Terraform Enterprise or Terraform Cloud instance host name', required=True)
-    tfec.add_argument('-s', '--stub',     type=str, help='Workspace name stub', required=True)
+    tfec.add_argument('-t', '--target',        type=str, help='Target Terraform Enterprise or Terraform Cloud instance host name', required=True)
+    tfec.add_argument('-s', '--stub',          type=str, help='Workspace name stub', required=True)
+    tfec.add_argument('-o', '--organization',  type=str, help='Organization name to work with', required=True)
 
     debug.add_argument('-D', '--debug',   action='store_true', help='Print debug output')
 
@@ -213,27 +274,29 @@ def main():
     log('INFO', main.__name__, 'TARGET:         '+target)
     log('INFO', main.__name__, 'WORKSPACE STUB: '+stub)
 
+    api_token = get_token(target)
+
     ## isolate action
     #
     if arg.create:
         log('INFO', main.__name__, 'ACTION:         CREATE')
         log('DIV', main.__name__)
-        lz_create(target, stub)
+        lz_create(target, stub, api_token, organization)
 
     if arg.read:
         log('INFO', main.__name__, 'ACTION:         READ')
         log('DIV', main.__name__)
-        lz_read(target, stub)
+        lz_read(target, stub, api_token, organization)
 
     if arg.update:
         log('INFO', main.__name__, 'ACTION:         UPDATE')
         log('DIV', main.__name__)
-        lz_update(target, stub)
+        lz_update(target, stub, api_token, organization)
 
     if arg.delete:
         log('INFO', main.__name__, 'ACTION:         DELETE')
         log('DIV', main.__name__)
-        lz_delete(target, stub)
+        lz_delete(target, stub, api_token, organization)
 
     log('INFO', main.__name__, 'All done.')
 
