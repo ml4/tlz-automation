@@ -1,0 +1,241 @@
+#!/usr/bin/env python3
+#
+## eliza: example landing zone automation
+#
+#
+#######################################################################################################################
+
+## main imports
+#
+import argparse
+import os
+import shutil
+import sys
+from time import strftime,gmtime
+
+#stock
+import subprocess
+import re
+import random
+import signal
+import datetime
+import frontmatter
+from itertools import zip_longest
+import git
+import glob
+
+############################################################################
+#
+#   Globals
+#
+############################################################################
+
+DEBUG = False
+script_name = os.path.basename(__file__)
+
+############################################################################
+#
+# Class: bcolors
+#
+############################################################################
+
+## bcolors - used to provide more engaging output
+#
+class bcolors:
+    Red      = '\033[31m'
+    Green    = '\033[32m'
+    Blue     = '\033[34m'
+    Cyan     = '\033[36m'
+    White    = '\033[37m'
+    Yellow   = '\033[33m'
+    Magenta  = '\033[35m'
+    BRed     = '\033[91m'
+    BGreen   = '\033[92m'
+    BBlue    = '\033[94m'
+    BCyan    = '\033[96m'
+    BWhite   = '\033[97m'
+    BYellow  = '\033[93m'
+    BMagenta = '\033[95m'
+    Grey     = '\033[90m'
+    Default  = '\033[99m'
+    Endc     = '\033[0m'
+#
+## End Class bcolors
+
+############################################################################
+#
+#   def log
+#
+############################################################################
+
+def log(level, func, message=''):
+    timestamp = strftime('%Y-%m-%d %H:%M:%S', gmtime())
+    num_cols, num_lines = shutil.get_terminal_size()
+    num_sep = num_cols - 41 - len(script_name)
+    color = ''
+
+    if level != 'INFO' and level != 'WARN' and level != 'ERROR' and level != 'DIV':
+        print(f'{bcolors.BCyan}{timestamp}{bcolors.Endc} [{bcolors.BRed}ERROR{bcolors.Endc}] [{bcolors.Cyan}{script_name}:{func}{bcolors.Endc}] {bcolors.BWhite}Internal error with log function call; level=|{level}|{bcolors.Endc}')
+        exit(1)
+
+    if level == 'INFO':
+        color = bcolors.BGreen
+
+    if level == 'WARN':
+        color = bcolors.BYellow
+
+    if level == 'ERROR':
+        color = bcolors.BRed
+
+    if level == 'DIV':
+        color = bcolors.BMagenta
+
+    if level == 'DIV':
+        print(f'{bcolors.BCyan}{timestamp}{bcolors.Endc} [{color}{level}{bcolors.Endc}]  [{bcolors.Cyan}{script_name}:{func}{bcolors.Endc}] {bcolors.BMagenta}', end='')
+        print('-' * int(num_sep), end='')
+        print(f'{bcolors.Endc}')
+    else:
+        print(f'{bcolors.BCyan}{timestamp}{bcolors.Endc} [{color}{level}{bcolors.Endc}] [{bcolors.Cyan}{script_name}:{func}{bcolors.Endc}] {bcolors.BWhite}{message}{bcolors.Endc}')
+
+############################################################################
+#
+#   def lz_create
+#
+############################################################################
+
+def lz_create(target, stub):
+    log('INFO', lz_create.__name__, 'Running action: create')
+
+############################################################################
+#
+#   def lz_read
+#
+############################################################################
+
+def lz_read(target, stub):
+    log('INFO', lz_read.__name__, 'Running action: read')
+
+############################################################################
+#
+#   def lz_update
+#
+############################################################################
+
+def lz_update(target, stub):
+    log('INFO', lz_update.__name__, 'Running action: update')
+
+############################################################################
+#
+#   def lz_delete
+#
+############################################################################
+
+def lz_delete(target, stub):
+    log('INFO', lz_delete.__name__, 'Running action: delete')
+
+############################################################################
+#
+#   def main
+#
+############################################################################
+
+#    #   ##   # #    #
+##  ##  #  #  # ##   #
+# ## # #    # # # #  #
+#    # ###### # #  # #
+#    # #    # # #   ##
+#    # #    # # #    #
+
+## Main
+#
+def main():
+    # snippetOutputLength = 512
+    # outputToStdout = True
+
+    # docType     = ''
+    # database    = ''
+    # objectstore = ''
+    # vmset       = ''
+    # dns         = ''
+    # endpoint    = ''
+
+    # signal.signal(signal.SIGINT, handler)
+
+    ## other locals
+    #
+    # teamRef    = 'CSA'
+    # outputPath = '/output'  # must not have a minus in the name as regex later
+
+    ## create parser
+    #
+    parser = argparse.ArgumentParser(
+        description=f'eliza: example landing zone automation. This script provides an example as to how to automate a Terraform Enterprise/Cloud landing zone onboarding workflow. This script might be embedded in a docker container and/or automated from a developer frontend such as Jira or SNOW.',
+        formatter_class=lambda prog: argparse.HelpFormatter(prog,max_help_position=80, width=130)
+    )
+    optional = parser._action_groups.pop() # Edited this line
+
+    action       = parser.add_argument_group('To specify create, read, update, delete')
+    tfec         = parser.add_argument_group('To specify target Terraform Enterprise or Terraform Cloud instance')
+    debug        = parser.add_argument_group('Get debug output')
+
+    ## add arguments to the parser
+    #
+    action.add_argument('-c', '--create', action='store_true', help='Create a landing zone in Terraform Enterprise or Terraform Cloud')
+    action.add_argument('-r', '--read',   action='store_true', help='Read a landing zone in Terraform Enterprise or Terraform Cloud')
+    action.add_argument('-u', '--update', action='store_true', help='Update a landing zone in Terraform Enterprise or Terraform Cloud')
+    action.add_argument('-d', '--delete', action='store_true', help='Delete a landing zone in Terraform Enterprise or Terraform Cloud')
+
+    tfec.add_argument('-t', '--target',   type=str, help='Target Terraform Enterprise or Terraform Cloud instance host name', required=True)
+    tfec.add_argument('-s', '--stub',     type=str, help='Workspace name stub', required=True)
+
+    debug.add_argument('-D', '--debug',   action='store_true', help='Print debug output')
+
+    parser._action_groups.append(optional)
+
+    ## parse/set up
+    #
+    arg = parser.parse_args()
+
+    if arg.debug:
+        DEBUG = True
+    else:
+        DEBUG = False
+
+    if not (arg.create or arg.read or arg.update or arg.delete):
+        log('ERROR', main.__name__, 'Please supply one of -c, -r, -u or -d (create, read, update, delete)')
+        exit(1)
+
+    target = arg.target
+    stub   = arg.stub
+
+    log('INFO', main.__name__, 'eliza: landing zone automation')
+    log('DIV', main.__name__)
+    log('INFO', main.__name__, 'TARGET:         '+target)
+    log('INFO', main.__name__, 'WORKSPACE STUB: '+stub)
+
+    ## isolate action
+    #
+    if arg.create:
+        log('INFO', main.__name__, 'ACTION:         CREATE')
+        log('DIV', main.__name__)
+        lz_create(target, stub)
+
+    if arg.read:
+        log('INFO', main.__name__, 'ACTION:         READ')
+        log('DIV', main.__name__)
+        lz_read(target, stub)
+
+    if arg.update:
+        log('INFO', main.__name__, 'ACTION:         UPDATE')
+        log('DIV', main.__name__)
+        lz_update(target, stub)
+
+    if arg.delete:
+        log('INFO', main.__name__, 'ACTION:         DELETE')
+        log('DIV', main.__name__)
+        lz_delete(target, stub)
+
+    log('INFO', main.__name__, 'All done.')
+
+if __name__ == '__main__':
+    main()
